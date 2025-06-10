@@ -1,210 +1,207 @@
 <?php
-// admin/manage_products.php
-
+// File: admin/manage_products.php
 session_start();
-
-// 1) Security check: only allow access if admin is logged in.
-//    (Assumes you set $_SESSION['admin_id'] when the admin logged in.)
 if (!isset($_SESSION['admin_id'])) {
     header('Location: login.php');
     exit;
 }
-
-// 2) Include the PDO database connection
-require_once(__DIR__ . '/../config/database.php');
+require_once __DIR__ . '/../config/database.php';
 
 $action = $_GET['action'] ?? '';
 $error  = '';
-$name       = '';
-$description= '';
-$price      = 0.00;
+$name        = '';
+$description = '';
+$price       = '';
 
-// 3) Handle "Create" action: show form and insert on POST
-if ($action === 'create') {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Trim and validate inputs
-        $name        = trim($_POST['name'] ?? '');
-        $description = trim($_POST['description'] ?? '');
-        $price       = floatval($_POST['price'] ?? 0);
-
-        if ($name === '' || $price <= 0) {
-            $error = 'Please enter a valid product name and price.';
-        } else {
-            // Use a prepared statement to insert into products
-            $stmt = $pdo->prepare(
-                'INSERT INTO products (name, description, price) VALUES (:name, :description, :price)'
-            );
-            $stmt->execute([
-                ':name'        => $name,
-                ':description' => $description,
-                ':price'       => $price,
-            ]);
-            header('Location: manage_products.php');
-            exit;
-        }
+// Handle Create
+if ($action === 'create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name        = trim($_POST['name'] ?? '');
+    $description = trim($_POST['description'] ?? '');
+    $price       = trim($_POST['price'] ?? '');
+    if ($name === '' || !is_numeric($price) || $price <= 0) {
+        $error = 'Please enter a valid product name and price.';
+    } else {
+        $stmt = $pdo->prepare(
+            'INSERT INTO products (name, description, price) VALUES (:name, :description, :price)'
+        );
+        $stmt->execute([':name' => $name, ':description' => $description, ':price' => $price]);
+        header('Location: manage_products.php'); exit;
     }
 }
-
-// 4) Handle "Edit" action: fetch existing data, then update on POST
+// Handle Edit
 elseif ($action === 'edit') {
-    $id = intval($_GET['id'] ?? 0);
-
-    // 4a) First, fetch current product data so we can prefill the form
+    $id = (int)($_GET['id'] ?? 0);
     $stmt = $pdo->prepare('SELECT * FROM products WHERE id = ?');
     $stmt->execute([$id]);
     $prod = $stmt->fetch();
-
-    if (!$prod) {
-        exit('Product not found.');
-    }
-
+    if (!$prod) { header('Location: manage_products.php'); exit; }
     $name        = $prod['name'];
     $description = $prod['description'];
     $price       = $prod['price'];
-
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $name        = trim($_POST['name'] ?? '');
         $description = trim($_POST['description'] ?? '');
-        $price       = floatval($_POST['price'] ?? 0);
-
-        if ($name === '' || $price <= 0) {
+        $price       = trim($_POST['price'] ?? '');
+        if ($name === '' || !is_numeric($price) || $price <= 0) {
             $error = 'Please enter a valid product name and price.';
         } else {
-            // Prepared statement to update the product
             $stmt = $pdo->prepare(
-                'UPDATE products SET name = :name, description = :description, price = :price WHERE id = :id'
+                'UPDATE products SET name=:name, description=:description, price=:price WHERE id=:id'
             );
-            $stmt->execute([
-                ':name'        => $name,
-                ':description' => $description,
-                ':price'       => $price,
-                ':id'          => $id,
-            ]);
-            header('Location: manage_products.php');
-            exit;
+            $stmt->execute([':name'=>$name,':description'=>$description,':price'=>$price,':id'=>$id]);
+            header('Location: manage_products.php'); exit;
         }
     }
 }
-
-// 5) Handle "Delete" action: remove product and redirect
+// Handle Delete
 elseif ($action === 'delete') {
-    $id = intval($_GET['id'] ?? 0);
-    $stmt = $pdo->prepare('DELETE FROM products WHERE id = ?');
-    $stmt->execute([$id]);
-    header('Location: manage_products.php');
-    exit;
+    $id = (int)($_GET['id'] ?? 0);
+    $pdo->prepare('DELETE FROM products WHERE id = ?')->execute([$id]);
+    header('Location: manage_products.php'); exit;
 }
 
-// 6) By default (no action or after create/edit/delete), fetch all products to list
+// Fetch products list
 $stmt = $pdo->query('SELECT id, name, description, price FROM products ORDER BY id ASC');
 $products = $stmt->fetchAll();
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Manage Products</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    form { max-width: 400px; }
-    label { display: block; margin-bottom: 8px; }
-    input[type="text"], textarea, input[type="number"] {
-      width: 100%; padding: 6px; margin-bottom: 12px; box-sizing: border-box;
+    :root {
+      --primary: #0077ff;
+      --secondary: #00d4ff;
+      --bg-gradient: linear-gradient(135deg, #0077ff, #00d4ff);
+      --card-bg: rgba(255, 255, 255, 0.9);
+      --text-dark: #222;
+      --error-bg: rgba(220,53,69,0.1);
+      --btn-secondary: #6c757d;
     }
-    .error { color: red; margin-bottom: 12px; }
-    .actions a { margin-right: 8px; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family: 'Poppins', sans-serif;
+      background: var(--bg-gradient);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;}
+    .site-header {
+      backdrop-filter: blur(10px);
+      background: var(--header-bg);
+      padding: 1rem 0;
+    }
+    .site-header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+    .logo a {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #fff;
+      text-decoration: none;
+    }
+    .main-nav ul {
+      list-style: none;
+      display: flex;
+      gap: 1rem;
+    }
+    .main-nav a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .main-nav a:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    main.container {
+      flex: 1;
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    .card{background:var(--card-bg);backdrop-filter:blur(12px);border-radius:16px;width:100%;max-width:900px;box-shadow:0 8px 32px rgba(0,0,0,0.1);animation:fadeIn 0.8s ease-out;padding:2rem;}
+    h1{text-align:center;margin-bottom:1.5rem;font-size:2rem}
+    .actions{margin-bottom:1rem}
+    .actions .btn{background:var(--primary);color:#fff;padding:0.5rem 1rem;text-decoration:none;border-radius:8px;transition:background0.2s}
+    .actions .btn:hover{background:var(--secondary)}
+    .error{background:var(--error-bg);padding:0.75rem;border-radius:6px;margin-bottom:1rem;color:#dc3545}
+    form{margin-bottom:2rem}
+    .form-group{margin-bottom:1rem}
+    .form-group label{display:block;font-weight:600;margin-bottom:0.25rem}
+    .form-group input,.form-group textarea{width:100%;padding:0.75rem;border:1px solid#ccc;border-radius:8px}
+    .btn-primary{background:var(--primary);color:#fff;padding:0.75rem 1rem;border:none;border-radius:8px;cursor:pointer;transition:background0.2s}
+    .btn-primary:hover{background:var(--secondary)}
+    .btn-secondary{background:var(--btn-secondary);color:#fff;text-decoration:none;padding:0.75rem 1rem;border-radius:8px;display:inline-block;transition:background0.2s}
+    .btn-secondary:hover{background:#5a6268}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:0.75rem 1rem;border-bottom:1px solid#ddd}
+    th{background:var(--primary);color:#fff;position:sticky;top:0}
+    tbody tr:hover{background:rgba(0,119,255,0.05)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
-  <h1>Admin → Manage Products</h1>
-
-  <!-- Link to Add New Product -->
-  <p>
-    <a href="manage_products.php?action=create">+ Add New Product</a> |
-    <a href="dashboard.php">&larr; Back to Dashboard</a>
-  </p>
-
-  <!-- If action is "create", show the Add Product form -->
-  <?php if ($action === 'create'): ?>
-    <h2>Add New Product</h2>
-    <?php if ($error): ?>
-      <p class="error"><?= htmlspecialchars($error) ?></p>
-    <?php endif; ?>
-    <form method="post" action="">
-      <label>
-        Product Name:
-        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>">
-      </label>
-      <label>
-        Description:
-        <textarea name="description"><?= htmlspecialchars($description) ?></textarea>
-      </label>
-      <label>
-        Price:
-        <input type="number" step="0.01" name="price" value="<?= htmlspecialchars($price) ?>">
-      </label>
-      <button type="submit">Save Product</button>
-    </form>
-
-  <!-- If action is "edit", show the Edit Product form -->
-  <?php elseif ($action === 'edit'): ?>
-    <h2>Edit Product #<?= htmlspecialchars($prod['id']) ?></h2>
-    <?php if ($error): ?>
-      <p class="error"><?= htmlspecialchars($error) ?></p>
-    <?php endif; ?>
-    <form method="post" action="">
-      <label>
-        Product Name:
-        <input type="text" name="name" value="<?= htmlspecialchars($name) ?>">
-      </label>
-      <label>
-        Description:
-        <textarea name="description"><?= htmlspecialchars($description) ?></textarea>
-      </label>
-      <label>
-        Price:
-        <input type="number" step="0.01" name="price" value="<?= htmlspecialchars($price) ?>">
-      </label>
-      <button type="submit">Update Product</button>
-    </form>
-    <p><a href="manage_products.php">&larr; Back to Product List</a></p>
-
-  <?php else: ?>
-    <!-- Default: show the table of existing products -->
-    <h2>Existing Products</h2>
-    <?php if (empty($products)): ?>
-      <p>No products found.</p>
+<header class="site-header">
+    <div class="container">
+      <h1 class="logo"><a>SportsPro Admin</a></h1>
+      <nav class="main-nav">
+        <ul>
+          <li><a href="dashboard.php">Dashboard</a></li>
+          <li><a href="logout.php">Log Out</a></li>
+          <li><a href="../index.php">Back to Menu</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+  <section class="card">
+    <h1>Manage Products</h1>
+    <?php if ($error): ?><div class="error"><?=htmlspecialchars($error)?></div><?php endif;?>
+    <?php if($action==='create'||$action==='edit'): ?>
+      <form method="post" novalidate>
+        <div class="form-group"><label for="name">Product Name</label><input id="name" name="name" type="text" required value="<?=htmlspecialchars($name)?>"></div>
+        <div class="form-group"><label for="description">Description</label><textarea id="description" name="description"><?=htmlspecialchars($description)?></textarea></div>
+        <div class="form-group"><label for="price">Price</label><input id="price" name="price" type="number" step="0.01" required value="<?=htmlspecialchars($price)?>"></div>
+        <button type="submit" class="btn-primary"><?= $action==='create'?'Save Product':'Update Product'?></button>
+        <a href="manage_products.php" class="btn-secondary">Cancel</a>
+      </form>
     <?php else: ?>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th><th>Name</th><th>Description</th><th>Price</th><th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($products as $p): ?>
+      <div class="actions">
+        <a href="dashboard.php" class="btn">Back</a>
+        <a href="manage_products.php?action=create" class="btn">Add New Product</a>
+      </div>
+      <?php if(empty($products)): ?>
+        <p>No products found.</p>
+      <?php else: ?>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Price</th><th>Actions</th></tr></thead>
+          <tbody>
+            <?php foreach($products as $p): ?>
             <tr>
-              <td><?= htmlspecialchars($p['id']) ?></td>
-              <td><?= htmlspecialchars($p['name']) ?></td>
-              <td><?= nl2br(htmlspecialchars($p['description'])) ?></td>
-              <td>$<?= htmlspecialchars(number_format($p['price'], 2)) ?></td>
-              <td class="actions">
-                <a href="manage_products.php?action=edit&id=<?= $p['id'] ?>">Edit</a>
-                <a href="manage_products.php?action=delete&id=<?= $p['id'] ?>"
-                   onclick="return confirm('Are you sure you want to delete this product?');">
-                  Delete
-                </a>
+              <td><?=htmlspecialchars($p['id'])?></td>
+              <td><?=htmlspecialchars($p['name'])?></td>
+              <td><?=nl2br(htmlspecialchars($p['description']))?></td>
+              <td>$<?=number_format($p['price'],2)?></td>
+              <td>
+                <a href="manage_products.php?action=edit&id=<?=$p['id']?>" class="btn-secondary">Edit</a>
+                <a href="manage_products.php?action=delete&id=<?=$p['id']?>" class="btn-secondary" onclick="return confirm('Delete this product?');">Delete</a>
               </td>
             </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+            <?php endforeach;?>
+          </tbody>
+        </table>
+      <?php endif; ?>
     <?php endif; ?>
-  <?php endif; ?>
-
+  </section>
+  </main>
 </body>
 </html>
